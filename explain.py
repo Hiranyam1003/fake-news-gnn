@@ -1,4 +1,4 @@
-"""Turn pooling-attention weights into a reviewer-readable rationale."""
+"""Reviewer-readable explanations: attention over the propagation tree, and the words in the source text."""
 import numpy as np
 
 
@@ -61,3 +61,13 @@ def rationale(nodes, num_nodes):
 def explain(tree, attention, k=5):
     nodes = top_nodes(tree, attention, k) if attention is not None else []
     return nodes, rationale(nodes, tree.num_nodes)
+
+
+def text_evidence(model, data, feature_names, cls, k=5):
+    """Gradient x input over the TF-IDF vector: the terms that pushed the model toward class `cls`."""
+    data = data.clone()
+    data.text = data.text.clone().requires_grad_(True)
+    model.eval()
+    model(data)[0, cls].backward()
+    contrib = (data.text.grad * data.text)[0].detach().numpy()
+    return [dict(term=str(feature_names[i]), weight=float(contrib[i])) for i in np.argsort(-contrib)[:k] if contrib[i] > 0]

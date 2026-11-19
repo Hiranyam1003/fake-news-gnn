@@ -73,7 +73,9 @@ def early_detection(model, trees, text_vecs, scaler, ks, hours, device="cpu"):
 def faithfulness(model, trees, text_vecs, scaler, device="cpu", frac=0.1):
     """Drop in predicted-class probability when removing the top-attended nodes vs. random nodes.
 
-    If attention reflects what the model actually uses, removing top nodes should hurt more.
+    If attention reflects what the model actually uses, removing top nodes should change the
+    prediction more. Signed drops cancel out (a removed node can push either way), so the
+    absolute change is reported as well.
     """
     rng = np.random.default_rng(SEED)
     proba, atts = predict_trees(model, trees, text_vecs, scaler, device)
@@ -97,7 +99,41 @@ def faithfulness(model, trees, text_vecs, scaler, device="cpu", frac=0.1):
         mean_drop_top=float(drop_top.mean()),
         mean_drop_random=float(drop_rand.mean()),
         share_top_hurts_more=float((drop_top > drop_rand).mean()),
+        mean_abs_change_top=float(np.abs(drop_top).mean()),
+        mean_abs_change_random=float(np.abs(drop_rand).mean()),
     )
+
+
+def final_report():
+    """Final-stage analysis of the saved beta joint checkpoints on their held-out test claims:
+    how much the propagation tree changes the text-only call, and absolute faithfulness."""
+    from data import load_trees
+    from predict import Predictor
+
+    report = {}
+    for dataset in DATASETS:
+        p = Predictor(dataset, "joint", "beta")
+        trees = {t.source_id: t for t in load_trees(dataset)}
+        test = [trees[i] for i in p.test_ids]
+        y = np.array([t.label for t in test])
+        vecs = p.encoder.transform([t.text for t in test])
+        full = predict_trees(p.model, test, vecs, p.scaler)[0].argmax(1)
+        text_only = predict_trees(p.model, [truncate(t, k=1) for t in test], vecs, p.scaler)[0].argmax(1)
+        changed = full != text_only
+        report[dataset] = dict(
+            test_claims=len(test),
+            acc_full=float((full == y).mean()),
+            acc_text_only=float((text_only == y).mean()),
+            share_changed=float(changed.mean()),
+            changed_to_correct=int((changed & (full == y)).sum()),
+            changed_to_wrong=int((changed & (text_only == y)).sum()),
+            faithfulness=faithfulness(p.model, test, vecs, p.scaler),
+        )
+    out = RUNS_DIR / "final" / "report.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, indent=2))
+    print(json.dumps(report, indent=2))
+    print(f"\nSaved {out}")
 
 
 def aggregate(fold_metrics):
@@ -157,5 +193,6 @@ def summary(stage):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", choices=["prototype", "beta"], required=True)
-    summary(parser.parse_args().stage)
+    parser.add_argument("--stage", choices=["prototype", "beta", "final"], required=True)
+    stage = parser.parse_args().stage
+    final_report() if stage == "final" else summary(stage)

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Propagation Check</title>
+<meta name="description" content="Graph-neural-network fake-news check that reads a tweet's text and how it spread.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='5' fill='%2318202b'/%3E%3Ccircle cx='27' cy='9' r='3' fill='%235b3fd1'/%3E%3Ccircle cx='6' cy='24' r='3' fill='%238c9cae'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+</head>
+<body>
+<header class="masthead">
+  <a class="wordmark" href="#demo">Propagation<span>Check</span></a>
+  <nav class="views" aria-label="Views">
+    <a href="#demo" data-view="demo">Live demo</a>
+    <a href="#results" data-view="results">Results</a>
+    <a href="#try" data-view="try">Try your own</a>
+  </nav>
+  <div class="settings">
+    <div class="segmented" role="radiogroup" aria-label="Dataset" data-setting="dataset">
+      <button role="radio" data-value="twitter15">Twitter15</button>
+      <button role="radio" data-value="twitter16">Twitter16</button>
+    </div>
+    <div class="segmented" role="radiogroup" aria-label="Model" data-setting="mode">
+      <button role="radio" data-value="content" title="Reads the tweet text only">Text</button>
+      <button role="radio" data-value="structure" title="Reads the spread only">Spread</button>
+      <button role="radio" data-value="joint" title="Reads text and spread">Text + spread</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="view-demo" class="view demo-layout" hidden>
+    <aside class="claims" aria-label="Held-out claims">
+      <div class="claims-head">
+        <p class="claims-intro">Claims the model never saw in training.</p>
+        <div class="chips" role="radiogroup" aria-label="Filter claims">
+          <button role="radio" data-filter="changed">Spread changed the call</button>
+          <button role="radio" data-filter="wrong">Model got it wrong</button>
+          <button role="radio" data-filter="all">All</button>
+        </div>
+        <label class="search"><span class="sr-only">Search claims</span>
+          <input type="search" id="claim-search" placeholder="Search claim text">
+        </label>
+      </div>
+      <ol class="claim-list" id="claim-list"></ol>
+    </aside>
+    <div class="stage-wrap" id="demo-stage"></div>
+  </section>
+
+  <section id="view-results" class="view results" hidden></section>
+
+  <section id="view-try" class="view try-layout" hidden>
+    <form class="try-form" id="try-form">
+      <h1>Check your own claim</h1>
+      <p>Paste the source tweet and its propagation tree in the Twitter15/16 format: one
+        <code>parent -&gt; child</code> line per retweet or reply.</p>
+      <label for="try-text">Source tweet</label>
+      <textarea id="try-text" rows="3" required placeholder="e.g. breaking: officials confirm the bridge has collapsed"></textarea>
+      <label for="try-tree">Propagation tree</label>
+      <textarea id="try-tree" rows="7" required spellcheck="false"
+        placeholder="['ROOT', 'ROOT', '0.0']->['u1', '1001', '0.0']"></textarea>
+      <div class="try-actions">
+        <button type="submit" class="primary">Analyse claim</button>
+        <label class="file-button">Load a tree file<input type="file" id="try-file" accept=".txt"></label>
+        <button type="button" class="link" id="try-sample">Fill in an example</button>
+      </div>
+      <p class="form-error" id="try-error" role="alert"></p>
+    </form>
+    <div class="stage-wrap" id="try-stage"></div>
+  </section>
+</main>
+
+<footer class="foot">
+  Project 13, BTECH CAP 501. Advisory only: this tool flags claims for a human reviewer and must not remove content on its own.
+</footer>
+
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

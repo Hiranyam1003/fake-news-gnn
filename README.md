@@ -13,7 +13,7 @@ Outputs are advisory only: the tool flags claims for human review.
 |---|---|---|
 | 1. Prototype | built | End-to-end pipeline: TF-IDF text, GraphSAGE + attention pooling, content / structure / joint comparison on one 70/10/20 split, early detection at 5 and 10 nodes, CLI prediction with rationale |
 | 2. Beta | built | Late fusion (graph sees structure only, text joins at the classifier), 5-fold cross-validation (mean ± std), training on truncated trees for early detection, curves by node count and by hours, explanation-faithfulness test, latency check, Streamlit reviewer app with feedback collection |
-| 3. Final | not started | Model/app hardening using beta feedback, deployment, results write-up |
+| 3. Final | built | Text explanation (TF-IDF words that drove the prediction), text-alone vs with-spread comparison, corrected faithfulness metric (absolute change), web app (replaces the beta Streamlit app) with an animated replay of each claim's spread, live verdict and confidence as the tree grows, a results view and a try-your-own form. Serves the beta checkpoints, so no retraining |
 
 ## Setup
 
@@ -41,8 +41,11 @@ python evaluate.py --stage beta
 # predict one claim, optionally from only the first k nodes of its spread
 python predict.py --dataset twitter16 --k 10
 
-# beta reviewer app (feedback goes to runs/beta_feedback.csv)
-streamlit run app.py
+# final-stage analysis on the saved beta checkpoints -> runs/final/report.json
+python evaluate.py --stage final
+
+# web app (Live demo, Results, Try your own)
+python server.py                            # http://localhost:8008
 
 # tests
 python -m pytest tests
@@ -62,9 +65,10 @@ Each run writes to `runs/<stage>/<dataset>/<mode>/`:
 | `features.py` | 7 structural node features (depth, delay, retweet/reply, children, arrival rank, repeat user, is-root) and source-text vectors (TF-IDF; MiniLM available via `text_encoder="minilm"`) |
 | `models.py` | `ContentMLP` (text only) and `SAGEClassifier` (GraphSAGE + attention pooling; structure-only or joint, with text fed into every layer or only at the classifier) |
 | `train.py` | training with early stopping, CV, holdout model, latency |
-| `evaluate.py` | metrics, early detection, faithfulness, results table |
-| `explain.py` | turns attention weights into a plain-language rationale |
-| `predict.py` / `app.py` | CLI and Streamlit interfaces |
+| `evaluate.py` | metrics, early detection, faithfulness, results table, final-stage report |
+| `explain.py` | turns attention weights into a plain-language rationale; ranks the TF-IDF terms behind a prediction (gradient × input) |
+| `predict.py` | CLI prediction |
+| `server.py` + `web/` | web app: Starlette JSON API over the saved models, and a hand-built HTML/JS/D3 frontend |
 
 Only the source tweet has text in this dataset (Twitter's terms prevent sharing the rest), so:
 - **content** = source text only
@@ -84,3 +88,21 @@ Only the source tweet has text in this dataset (Twitter's terms prevent sharing 
 Feeding the text into every layer let the graph branch overfit before it learned to use the text;
 late fusion fixed that. The frozen MiniLM encoder was worse than TF-IDF on these short,
 claim-specific tweets, so beta keeps TF-IDF.
+
+## Final-stage findings (held-out test claims, joint model)
+
+| | Twitter15 | Twitter16 |
+|---|---|---|
+| accuracy from text alone (source post only) | 0.795 | 0.811 |
+| accuracy with the full spread | 0.849 | 0.866 |
+| verdicts changed by the spread | 10% (20 fixed, 4 broken) | 12% (13 fixed, 4 broken) |
+| mean \|Δp\| when removing top-attended 10% of nodes | 0.065 | 0.077 |
+| mean \|Δp\| when removing random 10% of nodes | 0.006 | 0.008 |
+
+Beta reported attention as "weakly faithful" because it averaged *signed* probability drops, and
+those cancel out: a removed node can push either way. Measured by absolute change, removing the
+top-attended nodes moves the prediction about 10× more than removing random nodes. Attention does
+find influential nodes; it does not say which direction they push.
+
+At 5–50 nodes, joint still performs about the same as text only; the gain from propagation needs
+more of the spread. This is reported as a limitation, not fixed.

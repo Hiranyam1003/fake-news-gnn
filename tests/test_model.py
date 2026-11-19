@@ -6,7 +6,7 @@ from torch_geometric.loader import DataLoader
 from config import LABELS, STAGE_CONFIG
 from data import parse_tree, truncate
 from evaluate import compute_metrics
-from explain import explain
+from explain import explain, text_evidence
 from features import FeatureScaler, tree_to_data
 from models import build_model
 
@@ -57,3 +57,14 @@ def test_metrics_perfect_predictions():
     y = np.array([0, 1, 2, 3])
     m = compute_metrics(y, np.eye(4))
     assert m["acc"] == 1 and m["macro_f1"] == 1 and m["verdict_acc"] == 1
+
+
+def test_text_evidence_names_supporting_terms(batch):
+    _, b = batch
+    model = build_model("joint", b.x.size(1), TEXT_DIM, STAGE_CONFIG["beta"])
+    data = b.get_example(0)
+    data.batch = None
+    names = [f"w{i}" for i in range(TEXT_DIM)]
+    words = text_evidence(model, data, names, cls=0)
+    assert all(w["term"] in names and w["weight"] > 0 for w in words)
+    assert len(words) <= 5
